@@ -9,7 +9,9 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <numeric>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -59,9 +61,8 @@ template <std::unsigned_integral T> T parse(std::string_view arg) {
 }
 
 template <std::unsigned_integral T>
-std::unique_ptr<T[]> constexpr work(T v_min, T v_max, T base,
-                                    std::unique_ptr<T[]> sums,
-                                    T sums_size) noexcept {
+constexpr std::span<T> work(T v_min, T v_max, T base,
+                            std::span<T> sums) noexcept {
   assert(0 != base);
   /*
    * start from maximum value up to 0 to count up sums of digits it consists
@@ -73,7 +74,7 @@ std::unique_ptr<T[]> constexpr work(T v_min, T v_max, T base,
       x += t % base;
       t /= base;
     }
-    assert(x < sums_size);
+    assert(x < sums.size());
     ++sums[x];
   }
 
@@ -141,33 +142,65 @@ int main(int argc, char const *argv[]) try {
     auto const parallel_nr_max = static_cast<uint64_t>(
         std::max(std::thread::hardware_concurrency(), 1u));
 
-    std::vector<std::future<std::unique_ptr<uint64_t[]>>> asyncs(
+    std::vector<std::future<std::span<uint64_t>>> asyncs(
         std::min(div_round_up(v_count, kAsyncCountFactor), parallel_nr_max) -
         1u);
+
+    /* number of works is a sum of number of asynchronous works and the work in
+     * main thread to be run */
+    auto const works_nr = asyncs.size() + 1u;
+
+#ifdef __cpp_lib_hardware_interference_size
+    auto const u64_chunks_nr_per_cache_line = div_round_up(
+        std::hardware_destructive_interference_size, sizeof(uint64_t));
+#elif defined(__x86_64__) || defined(_M_X64)
+    auto const u64_chunks_nr_per_cache_line = UINT64_C(8);
+#else
+    /* let it be 1 by default for other architectures to meet maximum
+     * performance to memory consumption detriment */
+    auto const u64_chunks_nr_per_cache_line =
+        div_round_up(sizeof(std::max_align_t), sizeof(uint64_t));
+#endif
+
+    auto const u64_chunks_nr_per_work =
+        div_round_up(max_sum + 1, u64_chunks_nr_per_cache_line) *
+        u64_chunks_nr_per_cache_line;
+
+    /* buffer for temporary sums that works will compute */
+    auto buffer_sums =
+        std::make_unique<uint64_t[]>(mul(u64_chunks_nr_per_work, works_nr));
+
     /*
      * assess if there is an asynchronous work required to speed up the overall
      * calculations
      */
-    if (!asyncs.empty()) {
+    if (!(works_nr < 2)) {
       /* Step is how many values must be processed by one asynchronous work */
-      auto const v_step = v_count / (asyncs.size() + 1u);
-      for (auto &async : asyncs) {
+      auto const v_step = v_count / works_nr;
+      for (uint64_t async_work_nr = 0; async_work_nr < asyncs.size();
+           ++async_work_nr, v_min = v_min + v_step) {
         /* run asynchronous works, each doing computations with its own range
          * of values
          *
          * array of distinct sums that could give sum of digits, from 0 up to
          * @max_sum inclusively
          */
-        async = std::async(
+        asyncs[async_work_nr] = std::async(
             std::launch::async, work<uint64_t>, v_min, v_min + v_step - 1, base,
-            std::make_unique<uint64_t[]>(max_sum + 1), max_sum + 1);
-        v_min = v_min + v_step;
+            std::span{
+                &buffer_sums[u64_chunks_nr_per_work * async_work_nr],
+                max_sum + 1,
+            });
       }
     }
 
     /* main thread is also supposed to do some worthwhile work */
-    auto sums = work(v_min, v_max, base,
-                     std::make_unique<uint64_t[]>(max_sum + 1), max_sum + 1);
+    auto result_sums =
+        work(v_min, v_max, base,
+             std::span{
+                 &buffer_sums[u64_chunks_nr_per_work * (works_nr - 1)],
+                 max_sum + 1,
+             });
 
     /* wait until all asynchronous works have finished their computations */
     while (!asyncs.empty()) {
@@ -182,12 +215,13 @@ int main(int argc, char const *argv[]) try {
                 return std::future_status::ready == async.wait_for(0s);
               });
           ait != asyncs.end()) [[likely]] {
+
         /*
          * as an asynchronous work has finished, we accumulate its results
          * with results of main thread
          */
-        std::transform(sums.get(), sums.get() + max_sum + 1, ait->get().get(),
-                       sums.get(), plus<uint64_t>);
+        std::ranges::transform(result_sums, ait->get(), result_sums.begin(),
+                               plus<uint64_t>);
         /*
          * throw away the outworked asynchronous task, wait the next or finish
          * with the cycle
@@ -200,9 +234,9 @@ int main(int argc, char const *argv[]) try {
     }
 
     /* result is a sum of all distinct sums, squared on-going */
-    result =
-        std::transform_reduce(sums.get(), sums.get() + max_sum + 1, sums.get(),
-                              UINT64_C(0), plus<uint64_t>, mul<uint64_t>);
+    result = std::transform_reduce(result_sums.begin(), result_sums.end(),
+                                   result_sums.begin(), UINT64_C(0),
+                                   plus<uint64_t>, mul<uint64_t>);
 
     /* check if order is odd */
     if (order & 0x1)
