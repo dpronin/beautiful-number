@@ -145,7 +145,7 @@ int main(int argc, char const *argv[]) try {
         std::min(div_round_up(v_count, kAsyncCountFactor), parallel_nr_max) -
         1u);
     /*
-     * assess is there any asynchronous work required to speed up the overall
+     * assess if there is an asynchronous work required to speed up the overall
      * calculations
      */
     if (!asyncs.empty()) {
