@@ -70,10 +70,8 @@ constexpr std::span<T> work(T v_min, T v_max, T base,
    */
   for (auto v = v_min; v <= v_max; ++v) {
     auto x = T{};
-    for (auto t = v; t;) {
+    for (auto t = v; t; t /= base)
       x += t % base;
-      t /= base;
-    }
     assert(x < sums.size());
     ++sums[x];
   }
