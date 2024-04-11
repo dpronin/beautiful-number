@@ -31,6 +31,10 @@ template <std::unsigned_integral T> constexpr T mul(T l, T r) {
   return x;
 }
 
+constexpr auto sqr(std::unsigned_integral auto v) {
+  return v * v;
+}
+
 template <std::unsigned_integral T> constexpr T plus(T l, T r) {
   T x;
   if (__builtin_add_overflow(l, r, &x))
@@ -233,8 +237,8 @@ int main(int argc, char const *argv[]) try {
 
     /* result is a sum of all distinct sums, squared on-going */
     result = std::transform_reduce(result_sums.begin(), result_sums.end(),
-                                   result_sums.begin(), UINT64_C(0),
-                                   plus<uint64_t>, mul<uint64_t>);
+                                    UINT64_C(0),
+                                   plus<uint64_t>, sqr<uint64_t>);
 
     /* check if order is odd */
     if (order & 0x1)
