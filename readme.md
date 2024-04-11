@@ -1,15 +1,33 @@
-examples of compiling (C++20 support is required):
+# Configuring and building
 
-> $ g++ task.cpp -O3 -std=gnu++20 -otask
+## Release
 
-> $ clang++ task.cpp -O3 -std=gnu++20 -otask -stdlib=libc++
+```bash
+mkdir -p release
+rm -rf release/*
+cd release
+cmake ../ -DCMAKE_BUILD_TYPE=Release
+cmake --build . --verbose -j$(nproc)
+```
 
-> $ clang++ task.cpp -O3 -std=gnu++20 -otask -stdlib=libstdc++
+## Debug
 
-example of running:
+```bash
+mkdir -p debug
+rm -rf debug/*
+cd debug
+cmake ../ -DCMAKE_BUILD_TYPE=Debug
+cmake --build . --verbose -j$(nproc)
+```
 
-> $ ./task \<base\> \<order\>
+# Running
 
-example of running to meet the requirements of the task:
+```bash
+$ ./task <base> <order>
+```
 
-> $ ./task 13 13
+To meet the requirements of the task
+
+```bash
+$ ./task 13 13
+```
