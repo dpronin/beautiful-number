@@ -9,8 +9,8 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <new>
 #include <numeric>
+#include <print>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -31,9 +31,7 @@ template <std::unsigned_integral T> constexpr T mul(T l, T r) {
   return x;
 }
 
-constexpr auto sqr(std::unsigned_integral auto v) {
-  return v * v;
-}
+constexpr auto sqr(std::unsigned_integral auto v) { return v * v; }
 
 template <std::unsigned_integral T> constexpr T plus(T l, T r) {
   T x;
@@ -84,8 +82,8 @@ constexpr std::span<T> work(T v_min, T v_max, T base,
 }
 
 template <std::unsigned_integral T>
-constexpr T v_max_compute(T base, T order) noexcept(
-    noexcept(plus(T{}, T{})) && noexcept(mul(T{}, T{}))) {
+constexpr T v_max_compute(T base, T order) noexcept(noexcept(plus(T{}, T{})) &&
+                                                    noexcept(mul(T{}, T{}))) {
   /*
    * count a maximum value that the number with @base and @order
    * could take
@@ -237,21 +235,20 @@ int main(int argc, char const *argv[]) try {
 
     /* result is a sum of all distinct sums, squared on-going */
     result = std::transform_reduce(result_sums.begin(), result_sums.end(),
-                                    UINT64_C(0),
-                                   plus<uint64_t>, sqr<uint64_t>);
+                                   UINT64_C(0), plus<uint64_t>, sqr<uint64_t>);
 
     /* check if order is odd */
     if (order & 0x1)
       result = mul(result, base);
   }
 
-  std::cout << result << std::endl;
+  std::println(std::cout, "{}", result);
 
   return 0;
 } catch (std::exception const &ex) {
-  std::cerr << "exception occurred: " << ex.what() << "\n";
+  std::println(std::cerr, "exception occurred: {}", ex.what());
   return EXIT_FAILURE;
 } catch (...) {
-  std::cerr << "unknown exception occurred\n";
+  std::println(std::cerr, "unknown exception occurred");
   return EXIT_FAILURE;
 }
