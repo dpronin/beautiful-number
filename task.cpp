@@ -17,23 +17,7 @@
 #include <thread>
 #include <vector>
 
-#ifdef __clang__
 #include <print>
-#else
-#include <format>
-#include <ostream>
-
-namespace std {
-
-template <typename... Args>
-void println(std::ostream &os, std::format_string<Args...> fmt,
-             Args &&...args) {
-  os << std::format(fmt, std::forward<Args>(args)...) << '\n';
-}
-
-} // namespace std
-
-#endif
 
 namespace {
 
@@ -136,28 +120,28 @@ int main(int argc, char const *argv[]) try {
 
   if (base > 0 && order > 0) {
     /* we may consider only half of values to fasten task completion */
-    auto const half_order = order / 2;
+    auto const half_order{order / 2};
 
     /*
      * maximum sum that could give sum of digits is maximum value of one digit
      * multiplied by number of digits under considiration
      */
-    auto const max_sum = mul(base - 1, half_order);
+    auto const max_sum{mul(base - 1, half_order)};
 
     /* minimal value to take into account is zero */
-    auto v_min = UINT64_C(0);
+    auto v_min{UINT64_C(0)};
 
     /* compute a maximum value based on @base and @half_order */
-    auto const v_max = v_max_compute(base, half_order);
+    auto const v_max{v_max_compute(base, half_order)};
     /*
      * number of values to take into account is a distance between maximum and
      * minimal value plus one
      */
-    auto const v_count = v_max - v_min + 1;
+    auto const v_count{v_max - v_min + 1};
 
     /* use C++ to learn how many concurrent HW-threads we have at the host */
-    auto const parallel_nr_max = static_cast<uint64_t>(
-        std::max(std::thread::hardware_concurrency(), 1u));
+    auto const parallel_nr_max{static_cast<uint64_t>(
+        std::max(std::thread::hardware_concurrency(), 1u))};
 
     std::vector<std::future<std::span<uint64_t>>> asyncs(
         std::min(div_round_up(v_count, kAsyncCountFactor), parallel_nr_max) -
@@ -165,27 +149,27 @@ int main(int argc, char const *argv[]) try {
 
     /* number of works is a sum of number of asynchronous works and the work in
      * main thread to be run */
-    auto const works_nr = asyncs.size() + 1u;
+    auto const works_nr{asyncs.size() + 1u};
 
 #ifdef __cpp_lib_hardware_interference_size
-    auto const u64_chunks_nr_per_cache_line = div_round_up(
-        std::hardware_destructive_interference_size, sizeof(uint64_t));
+    auto const u64_chunks_nr_per_cache_line{div_round_up(
+        std::hardware_destructive_interference_size, sizeof(uint64_t))};
 #elif defined(__x86_64__) || defined(_M_X64)
     auto const u64_chunks_nr_per_cache_line = UINT64_C(8);
 #else
     /* let it be 1 by default for other architectures to meet maximum
      * performance to memory consumption detriment */
-    auto const u64_chunks_nr_per_cache_line =
-        div_round_up(sizeof(std::max_align_t), sizeof(uint64_t));
+    auto const u64_chunks_nr_per_cache_line{
+        div_round_up(sizeof(std::max_align_t), sizeof(uint64_t))};
 #endif
 
-    auto const u64_chunks_nr_per_work =
+    auto const u64_chunks_nr_per_work{
         div_round_up(max_sum + 1, u64_chunks_nr_per_cache_line) *
-        u64_chunks_nr_per_cache_line;
+        u64_chunks_nr_per_cache_line};
 
     /* buffer for temporary sums that works will compute */
-    auto buffer_sums =
-        std::make_unique<uint64_t[]>(mul(u64_chunks_nr_per_work, works_nr));
+    auto buffer_sums{
+        std::make_unique<uint64_t[]>(mul(u64_chunks_nr_per_work, works_nr))};
 
     /*
      * assess if there is an asynchronous work required to speed up the overall
@@ -193,8 +177,8 @@ int main(int argc, char const *argv[]) try {
      */
     if (!(works_nr < 2)) {
       /* Step is how many values must be processed by one asynchronous work */
-      auto const v_step = v_count / works_nr;
-      for (uint64_t async_work_nr = 0; async_work_nr < asyncs.size();
+      auto const v_step{v_count / works_nr};
+      for (auto async_work_nr{UINT64_C(0)}; async_work_nr < asyncs.size();
            ++async_work_nr, v_min = v_min + v_step) {
         /* run asynchronous works, each doing computations with its own range
          * of values
@@ -212,25 +196,25 @@ int main(int argc, char const *argv[]) try {
     }
 
     /* main thread is also supposed to do some worthwhile work */
-    auto result_sums =
+    auto result_sums{
         work(v_min, v_max, base,
              std::span{
                  &buffer_sums[u64_chunks_nr_per_work * (works_nr - 1)],
                  max_sum + 1,
-             });
+             })};
 
     /* wait until all asynchronous works have finished their computations */
     while (!asyncs.empty()) {
-      if (auto ait = std::ranges::find_if(
-              asyncs,
-              [](auto const &async) {
-                using namespace std::chrono_literals;
-                /*
-                 * don't wait for any time, only
-                 * check if task is ready and return
-                 */
-                return std::future_status::ready == async.wait_for(0s);
-              });
+      if (auto ait{std::ranges::find_if(asyncs,
+                                        [](auto const &async) {
+                                          using namespace std::chrono_literals;
+                                          /*
+                                           * don't wait for any time, only
+                                           * check if task is ready and return
+                                           */
+                                          return std::future_status::ready ==
+                                                 async.wait_for(0s);
+                                        })};
           ait != asyncs.end()) [[likely]] {
 
         /*
