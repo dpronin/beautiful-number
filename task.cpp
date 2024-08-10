@@ -1,4 +1,5 @@
 #include <cassert>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -44,22 +45,13 @@ template <std::unsigned_integral T> constexpr T plus(T l, T r) {
 }
 
 template <std::unsigned_integral T> T parse(std::string_view arg) {
-  T r;
-
-  char *p_end;
-
-  errno = 0;
-  r = std::strtoul(arg.data(), &p_end, 10);
-  if (errno || p_end < (arg.data() + arg.size())) {
-    auto msg =
-        "could not convert '" + std::string{arg} + "' into decimal value";
-    if (errno) {
-      msg += ", reason: ";
-      msg += std::strerror(errno);
-    }
-    throw std::invalid_argument(std::move(msg));
+  T r{};
+  if (auto const [p_end, e] =
+          std::from_chars(arg.data(), arg.data() + arg.size(), r);
+      p_end < arg.data() + arg.size()) {
+    throw std::invalid_argument("could not convert '" + std::string{arg} +
+                                "' into decimal value");
   }
-
   return r;
 }
 
@@ -106,17 +98,17 @@ constexpr T div_round_up(T v, T d) noexcept {
 
 int main(int argc, char const *argv[]) try {
   if (argc < 3) {
-    std::cerr << "call ./task <base> <order>\n";
+    std::println(std::cerr, "call ./task <base> <order>");
     return EXIT_FAILURE;
   }
 
-  auto result = UINT64_C(0);
+  auto result{UINT64_C(0)};
 
   /* parse 'base' defining a power (number of distinct values) of one digit */
-  auto const base = parse<uint64_t>(argv[1]);
+  auto const base{parse<uint64_t>(argv[1])};
 
   /* parse order of magnitude defining number of digits */
-  auto const order = parse<uint64_t>(argv[2]);
+  auto const order{parse<uint64_t>(argv[2])};
 
   if (base > 0 && order > 0) {
     /* we may consider only half of values to fasten task completion */
